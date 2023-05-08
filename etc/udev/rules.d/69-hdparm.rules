@@ -1,0 +1,3 @@
+SUBSYSTEM=="power_supply", ENV{POWER_SUPPLY_ONLINE}=="0", RUN+="/sbin/hdparm -B 128 -S 0 /dev/sda"
+SUBSYSTEM=="power_supply", ENV{POWER_SUPPLY_ONLINE}=="1", RUN+="/sbin/hdparm -B 254 -S 0 /dev/sda"
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sda", RUN+="/usr/bin/hdparm -W 0 /dev/sda"

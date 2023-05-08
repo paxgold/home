@@ -1,0 +1,11 @@
+# Static information about the filesystems.
+# See fstab(5) for details.
+
+# <file system> <dir> <type> <options> <dump> <pass>
+# /dev/sda2 LABEL=
+# UUID=#####	/         	ntfs      	rw,nosuid,nodev,user_id=0,group_id=0,allow_other,blksize=4096	0 0
+
+# /dev/sda1
+UUID=######	/         	ext4      	lazytime,discard,commit=200,data=ordered	0 2
+
+# /dev/sdb2					/home/.../windows					ext4		lazytime,commit=60,data=ordered

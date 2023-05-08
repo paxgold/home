@@ -1,0 +1,4 @@
+type         = scripted
+command      = /bin/alsactl -f /home/den/.my_asound.state restore
+restart      = false
+depends-on   = sysusers
