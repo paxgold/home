@@ -1,0 +1,108 @@
+# Maintainer: Drew DeVault <sir@cmpwn.com>
+# Contributor: Antonin Décimo <antonin dot decimo at gmail dot com>
+pkgname=sway-git
+_pkgname=sway
+pkgver=r7128.3cd7c717
+pkgrel=1
+license=("MIT")
+pkgdesc="Tiling Wayland compositor and replacement for the i3 window manager"
+arch=(x86_64)
+url='https://swaywm.org/'
+license=(MIT)
+install=sway.install
+provides=(sway "sway=${pkgver}")
+conflicts=(sway)
+depends=(
+  'cairo'
+  'gdk-pixbuf2'
+  'libevdev.so'
+  'libinput'
+  'libjson-c.so'
+  'libudev.so'
+  'libwayland-server.so'
+  'libwlroots.so'
+  'libxcb'
+  'libxkbcommon.so'
+  'pango'
+  'pcre2'
+  'ttf-font'
+)
+makedepends=(meson ninja wayland-protocols)
+backup=(
+  etc/sway/config
+)
+optdepends=(
+  'bemenu: Wayland-native alternative to dmenu'
+  'dmenu: Application launcher used in default config'
+  'foot: Terminal emulator used in the default configuration'
+  'i3status: Status line generation'
+  'mako: Lightweight notification daemon'
+  'polkit: System privilege control. Required if not using seatd service'
+  'swaybg: Wallpaper tool for sway'
+  'swayidle: Idle management daemon'
+  'swaylock: Screen locker'
+  'waybar: Highly customizable bar'
+  'xorg-xwayland: X11 support'
+)
+source=("${pkgname%-*}::git+https://github.com/swaywm/sway.git"
+)
+sha512sums=('SKIP')
+validpgpkeys=('34FF9526CFEF0E97A340E2E40FDE7BE0E88F5E48' # Simon Ser
+  '9DDA3B9FA5D58DD5392C78E652CB6609B22DA89A')            # Drew DeVault
+
+_extra_lto_flag=""
+
+pkgver() {
+	cd "$_pkgname"
+	printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+
+  if clang --version 2>/dev/null | grep -iq "clang\s*version\s*[0-9]" && ld.lld --version 2>/dev/null | grep -iq "LLD\s*[0-9]"; then
+    _extra_lto_flag='-D b_lto_mode=thin'
+  fi
+
+  cd "${srcdir:?}/sway" || (
+    echo -e "\E[1;31mCan't cd to ${srcdir:?}/sway directory! Prepare Failed! \E[0m"
+    exit 1
+  )
+
+  # Set the version information to 'Arch Linux' instead of 'makepkg'
+  sed -i "s/branch \\\'@1@\\\'/Artix Linux/g" meson.build
+
+
+}
+
+build() {
+
+  meson setup "sway" build \
+    --prefix /usr \
+    --libexecdir lib \
+    --sbindir bin \
+    --auto-features enabled \
+    --wrap-mode nodownload \
+    -D debug=false \
+    -D zsh-completions=false \
+	-D bash-completions=true \
+	-D fish-completions=false \
+	-D xwayland=disabled \
+	-D man-pages=disabled \
+	-D tray=enabled \
+    -D optimization=3 \
+    -D b_ndebug=true \
+    -D b_lto=true ${_extra_lto_flag} \
+    -D b_pie=true \
+    -D sd-bus-provider=libelogind \
+    -D werror=false
+	
+
+  meson compile -C build
+
+}
+
+package() {
+
+  DESTDIR="${pkgdir:?}" meson install -C build
+
+}

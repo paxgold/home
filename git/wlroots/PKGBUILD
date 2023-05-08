@@ -1,0 +1,82 @@
+# Maintainer: Adrian Perez de Castro <aperez@igalia.com>
+# Maintainer: Antonin Décimo <antonin dot decimo at gmail dot com>
+pkgname=wlroots-git
+pkgver=.r6236.47a250ae
+pkgrel=1
+license=(custom:MIT)
+pkgdesc='Modular Wayland compositor library (git version)'
+url=https://gitlab.freedesktop.org/wlroots/wlroots
+arch=(x86_64)
+provides=("libwlroots.so" "wlroots=${pkgver}")
+conflicts=(wlroots)
+options=('!debug' 'strip')
+depends=(
+	libwacom
+	libinput
+	libxkbcommon
+	opengl-driver
+	pixman
+	xcb-util-errors
+	xcb-util-renderutil
+	xcb-util-wm
+	wayland
+	seatd
+)
+makedepends=(
+	git
+	meson
+	wayland-protocols
+	xorgproto)
+source=("${pkgname}::git+${url}.git")
+md5sums=('SKIP')
+
+_extra_lto_flag=""
+
+
+prepare() {
+
+  if clang --version 2>/dev/null | grep -iq "clang\s*version\s*[0-9]" && ld.lld --version 2>/dev/null | grep -iq "LLD\s*[0-9]"; then
+    _extra_lto_flag='-D b_lto_mode=thin'
+  fi
+
+}
+
+pkgver () {
+	cd "${pkgname}"
+	printf ".r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+
+  # Vulkan renderer is still experimental but since mesa comes with
+  # libvulkan.so Meson autodetects this as wanting to build with Vulkan.
+
+  CFLAGS="${CFLAGS} -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function"
+  CXXFLAGS="${CXXFLAGS} -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function"
+
+  meson setup "wlroots-git" build \
+    --prefix /usr \
+    --libexecdir lib \
+    --sbindir bin \
+    --auto-features enabled \
+    --wrap-mode nodownload \
+    -D debug=false \
+    -D optimization=3 \
+    -D b_ndebug=true \
+    -D b_lto=true ${_extra_lto_flag} \
+    -D b_pie=true \
+    -D xwayland=disabled \
+    -D examples=false \
+	-Drenderers=gles2 \
+	-Dxcb-errors=disabled \
+	-Dbackends=drm,libinput
+	
+  ninja -C build
+
+}
+
+package() {
+
+  DESTDIR="${pkgdir:?}" meson install -C build
+
+}
