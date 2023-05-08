@@ -1,0 +1,130 @@
+pkgbase=gtk3+clang
+pkgname=(gtk3+clang)
+pkgver=3.24.37
+pkgrel=1
+epoch=1
+pkgdesc="GObject-based multi-platform GUI toolkit"
+arch=(x86_64)
+url="https://www.gtk.org/"
+depends=(cairo libepoxy gdk-pixbuf2
+         dconf pango shared-mime-info
+         wayland libxkbcommon json-glib librsvg
+         desktop-file-utils mesa iso-codes)
+makedepends=(git sassc meson
+  wayland-protocols)
+license=(LGPL)
+_commit=013b629a2e5420cc01647f859226eb1a37ebe661 # tags/3.24.34^0
+source=("git+https://gitlab.gnome.org/GNOME/gtk.git#commit=${_commit}"
+  gtk-query-immodules-3.0.hook)
+sha256sums=('SKIP'
+            'de46e5514ff39a7a65e01e485e874775ab1c0ad20b8e94ada43f4a6af1370845')
+
+_extra_lto_flag=""
+
+pkgver() {
+
+  cd "${srcdir:?}/gtk" || (
+    echo -e "\E[1;31mCan't cd to ${srcdir:?}/gtk directory! PkgVer Failed! \E[0m"
+    exit 1
+  )
+
+  git describe --tags | sed 's/[^-]*-g/r&/;s/-/+/g'
+
+}
+
+prepare() {
+
+  if clang --version 2>/dev/null | grep -iq "clang\s*version\s*[0-9]" && ld.lld --version 2>/dev/null | grep -iq "LLD\s*[0-9]"; then
+    _extra_lto_flag='-D b_lto_mode=thin'
+  fi
+
+  cd "${srcdir:?}/gtk" || (
+    echo -e "\E[1;31mCan't cd to ${srcdir:?}/gtk directory! Prepare Failed! \E[0m"
+    exit 1
+  )
+
+}
+
+build() {
+
+  CFLAGS+=" -DG_DISABLE_CAST_CHECKS"
+  meson setup gtk build \
+    --prefix /usr \
+    --libexecdir lib \
+    --sbindir bin \
+    --auto-features enabled \
+    --wrap-mode nodownload \
+    -D debug=false \
+    -D optimization=3 \
+    -D b_ndebug=true \
+    -D b_lto=true ${_extra_lto_flag} \
+    -D b_pie=true \
+    -D broadway_backend=false \
+    -D win32_backend=false \
+    -D quartz_backend=false \
+    -D cloudproviders=false \
+    -D profiler=false \
+    -D tracker3=false \
+    -D colord=no \
+    -D gtk_doc=false \
+    -D man=false \
+    -D introspection=false \
+    -D demos=false \
+    -D examples=false \
+	-D tests=false \
+	-D installed_tests=false \
+	-D x11_backend=true \
+	-D wayland_backend=true \
+	-D xinerama=no \
+	-D print_backends=auto
+
+  meson compile -C build
+
+}
+
+_pick() {
+
+  local p="$1" f d
+  shift
+  for f; do
+    d="${srcdir:?}/$p/${f#${pkgdir:?}/}"
+    mkdir -p "$(dirname "$d")"
+    mv "$f" "$d"
+    rmdir -p --ignore-fail-on-non-empty "$(dirname "$f")"
+  done
+
+}
+
+package_gtk3+clang() {
+
+  provides=(gtk3 "gtk3=${pkgver}" libgtk-3.so libgdk-3.so libgailutil-3.so)
+  conflicts=(gtk3)
+  install=gtk3.install
+
+  DESTDIR="${pkgdir:?}" meson install -C build
+
+  install -Dm644 /dev/stdin "${pkgdir:?}/usr/share/gtk-3.0/settings.ini" <<END
+[Settings]
+gtk-theme-name=Arc-Dark
+gtk-button-images=0
+gtk-cursor-theme-name=Bibata-Original-Ice
+gtk-cursor-theme-size=24
+gtk-enable-event-sounds=0
+gtk-enable-input-feedback-sounds=0
+gtk-font-name=Sans 11
+gtk-icon-theme-name=Flat-Remix-Green-Dark
+gtk-menu-images=0
+gtk-toolbar-icon-size=GTK_ICON_SIZE_SMALL_TOOLBAR
+gtk-toolbar-style=GTK_TOOLBAR_BOTH_HORIZ
+END
+
+  install -Dt "${pkgdir:?}/usr/share/libalpm/hooks" -m644 gtk-query-immodules-3.0.hook
+
+  cd "${pkgdir:?}" || (
+    echo -e "\E[1;31mCan't cd to ${pkgdir} directory! Package Failed! \E[0m"
+    exit 1
+  )
+
+  rm usr/bin/gtk-update-icon-cache
+
+}

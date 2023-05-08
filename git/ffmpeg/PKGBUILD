@@ -1,0 +1,147 @@
+# Maintainer : Daniel Bermond <dbermond@archlinux.org>
+# Contributor: Kamran Mackey <kamranm1200@gmail.com>
+# Contributor: richteer <richteer at lastprime.net>
+# Contributor: DrZaius <lou at fakeoutdoorsman.com>
+
+pkgname=ffmpeg-custom
+pkgver=5.2.r109965.ge50a02b0f6
+pkgrel=1
+pkgdesc='Complete solution to record, convert and stream audio and video (git version)'
+arch=('x86_64')
+url='https://www.ffmpeg.org/'
+license=('GPL3')
+depends=(
+  alsa-lib
+  aom
+  bzip2
+  fontconfig
+  gmp
+  gnutls
+  gsm
+  lame
+  libass.so
+  libavc1394
+  libdrm
+  libfreetype.so
+  libiec61883
+  libmodplug
+  libraw1394
+  libsoxr
+  libssh
+  libtheora
+  libva.so
+  libva-drm.so
+  libvidstab.so
+  libvorbisenc.so
+  libvorbis.so
+  libwebp
+  libx264.so
+  libxcb
+  libxml2
+  libxvidcore.so
+  libzimg.so
+  opencore-amr
+  openjpeg2
+  opus
+  speex
+  srt
+  v4l-utils
+  vmaf
+  xz
+  zlib
+)
+makedepends=(
+  clang
+  git
+  nasm
+)
+optdepends=('avisynthplus: for AviSynthPlus support'
+            'intel-media-sdk: for Intel Quick Sync Video'
+            'ladspa: for LADSPA filters'
+            'nvidia-utils: for Nvidia NVDEC/NVENC support')
+provides=('libavcodec.so' 'libavdevice.so' 'libavfilter.so' 'libavformat.so'
+          'libavutil.so' 'libpostproc.so' 'libswresample.so' 'libswscale.so'
+          'ffmpeg')
+conflicts=('ffmpeg')
+source=('git+https://git.ffmpeg.org/ffmpeg.git'
+        'add-av_stream_get_first_dts-for-chromium.patch')
+sha256sums=('SKIP'
+            '2df82046908015bf26bc1303275cf52ba01fa380029a54ea6415373e389e423c')
+
+prepare() {
+    patch -d ffmpeg -Np1 -i "${srcdir}/add-av_stream_get_first_dts-for-chromium.patch"
+}
+
+pkgver() {
+    printf '%s.r%s.g%s' "$(git -C ffmpeg describe --tags --long | awk -F'-' '{ sub(/^n/, "", $1); print $1 }')" \
+                        "$(git -C ffmpeg describe --tags --match 'N' | awk -F'-' '{ print $2 }')" \
+                        "$(git -C ffmpeg rev-parse --short HEAD)"
+}
+
+build() {
+    cd ffmpeg
+    printf '%s\n' '  -> Running ffmpeg configure script...'
+    
+    ./configure \
+      --prefix=/usr \
+      --enable-lto \
+      --disable-debug \
+      --disable-static \
+      --disable-stripping \
+	  --enable-fontconfig \
+	  --disable-vulkan \
+	  --disable-filters \
+      --disable-logging \
+      --disable-doc \
+      --disable-htmlpages \
+      --disable-manpages \
+      --disable-txtpages \
+      --disable-podpages \
+      --disable-ffplay \
+      --disable-ffprobe \
+        --enable-gmp \
+        --enable-gnutls \
+        --enable-gpl \
+        --disable-ladspa \
+        --disable-libaom \
+        --disable-libdav1d \
+        --enable-libass \
+        --enable-libdrm \
+        --enable-libfreetype \
+        --disable-libfribidi \
+        --enable-libgsm \
+        --enable-libiec61883 \
+        --disable-libjack \
+        --disable-libmfx \
+        --disable-vdpau \
+        --enable-libmodplug \
+        --enable-libmp3lame \
+        --enable-libopencore_amrnb \
+        --enable-libopencore_amrwb \
+        --enable-libopenjpeg \
+        --enable-libopus \
+        --disable-libpulse \
+        --enable-libsoxr \
+        --enable-libspeex \
+        --enable-libssh \
+        --enable-libtheora \
+        --enable-libv4l2 \
+        --enable-libvidstab \
+        --enable-libvorbis \
+        --enable-libvmaf \
+        --enable-libwebp \
+        --enable-libx264 \
+        --enable-libxcb \
+        --enable-libxml2 \
+        --enable-libxvid \
+        --enable-libzimg \
+        --enable-vaapi \
+        --enable-alsa \
+        --enable-shared \
+        --enable-version3
+    make
+}
+
+package() {
+    make -C ffmpeg DESTDIR="$pkgdir" install
+}

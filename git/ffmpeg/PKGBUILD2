@@ -1,0 +1,167 @@
+pkgname=ffmpeg+clang
+pkgver=5.1.2
+pkgrel=1
+epoch=2
+pkgdesc='Complete solution to record, convert and stream audio and video'
+arch=(x86_64)
+url=https://ffmpeg.org/
+license=(GPL3)
+depends=(
+  alsa-lib
+  bzip2
+  libass
+  vid.stab
+  freetype2
+  fontconfig
+  gmp
+  gnutls
+  gsm
+  libgl
+  mesa
+  lame
+  libavc1394
+  libdrm
+  libiec61883
+  libmodplug
+  libraw1394
+ # librsvg-2.so
+  libsoxr
+  libssh
+  libtheora
+  libva.so
+  libva-drm.so
+  libvorbisenc.so
+  libvorbis.so
+  libwebp
+  libx264.so
+  libxml2
+  libxvidcore.so
+  opencore-amr
+  openjpeg2
+  opus
+  speex
+  srt
+  v4l-utils
+  vmaf
+  xz
+  zlib
+)
+makedepends=(
+  clang
+  git
+  nasm
+)
+optdepends=(
+  'avisynthplus: AviSynthPlus support'
+  'intel-media-sdk: Intel QuickSync support'
+  'ladspa: LADSPA filters'
+  'nvidia-utils: Nvidia NVDEC/NVENC support'
+)
+provides=(
+  'ffmpeg' "ffmpeg=${epoch}:${pkgver}"
+  libavcodec.so
+  libavdevice.so
+  libavfilter.so
+  libavformat.so
+  libavutil.so
+  libpostproc.so
+  libswresample.so
+  libswscale.so
+)
+conflicts=('ffmpeg')
+_commit=eef763c7057a7f5f4b7dae7855d07b2a6da8b537
+source=(
+  "git+https://git.ffmpeg.org/ffmpeg.git#commit=${_commit}"
+  add-av_stream_get_first_dts-for-chromium.patch
+)
+sha256sums=('SKIP'
+            '57e26caced5a1382cb639235f9555fc50e45e7bf8333f7c9ae3d49b3241d3f77')
+prepare() {
+
+  if clang --version 2>/dev/null | grep -iq "clang\s*version\s*[0-9]" && ld.lld --version 2>/dev/null | grep -iq "LLD\s*[0-9]"; then
+    _llvm=1
+  fi
+
+  cd "${srcdir:?}/ffmpeg" || (
+    echo -e "\E[1;31mCan't cd to ${srcdir:?}/ffmpeg directory! Prepare Failed! \E[0m"
+    exit 1
+  )
+
+  patch -Np1 -i "${srcdir:?}/add-av_stream_get_first_dts-for-chromium.patch" # https://crbug.com/1251779
+
+}
+
+build() {
+
+  cd "${srcdir:?}/ffmpeg" || (
+    echo -e "\E[1;31mCan't cd to ${srcdir:?}/ffmpeg directory! Build Failed! \E[0m"
+    exit 1
+  )
+
+    ./configure \
+      --prefix=/usr \
+      --enable-lto \
+      --disable-debug \
+      --disable-static \
+      --disable-stripping \
+	  --enable-fontconfig \
+	  --disable-vulkan \
+	  --disable-filters \
+      --disable-logging \
+      --disable-doc \
+      --disable-htmlpages \
+      --disable-manpages \
+      --disable-txtpages \
+      --disable-podpages \
+      --disable-ffplay \
+      --disable-ffprobe \
+        --enable-gmp \
+        --enable-gnutls \
+        --enable-gpl \
+        --disable-ladspa \
+        --disable-libaom \
+        --disable-libdav1d \
+        --enable-libass \
+        --enable-libdrm \
+        --enable-libfreetype \
+        --disable-libfribidi \
+        --enable-libgsm \
+        --enable-libiec61883 \
+        --disable-libjack \
+        --disable-libmfx \
+        --disable-vdpau \
+        --enable-libmodplug \
+        --enable-libmp3lame \
+        --enable-libopencore_amrnb \
+        --enable-libopencore_amrwb \
+        --enable-libopenjpeg \
+        --enable-libopus \
+        --disable-libpulse \
+        --enable-libsoxr \
+        --enable-libspeex \
+        --enable-libssh \
+        --enable-libtheora \
+        --enable-libv4l2 \
+        --enable-libvidstab \
+        --enable-libvorbis \
+        --enable-libvmaf \
+        --enable-libwebp \
+        --enable-libx264 \
+        --enable-libxcb \
+        --enable-libxml2 \
+        --enable-libxvid \
+        --enable-libzimg \
+        --enable-vaapi \
+        --enable-alsa \
+        --enable-shared \
+        --enable-version3
+
+  make
+
+}
+
+package() {
+
+  make DESTDIR="${pkgdir:?}" -C ffmpeg install
+
+}
