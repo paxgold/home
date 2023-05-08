@@ -1,0 +1,129 @@
+pkgname=mesa-git
+pkgdesc="an open-source implementation of the OpenGL specification, git version"
+pkgver=22.2.0_devel.156378.5b683ba19ac7.d41d8cd98f00b204e9800998ecf8427e
+pkgrel=1
+arch=('x86_64')
+makedepends=('git' 'python-mako' 'libxml2' 'libva' 'elfutils' 'wayland-protocols' 'meson' 'ninja' 'glslang')
+depends=('libdrm' 'libelf' 'libunwind' 'libglvnd' 'wayland' 'lm_sensors' 'zstd' 'expat')
+optdepends=('opengl-man-pages: for the OpenGL API man pages')
+provides=('mesa' 'opencl-mesa' 'libva-mesa-driver' 'mesa-libgl' 'opengl-driver' 'opencl-driver')
+# provides=('mesa' 'opencl-mesa' 'libva-mesa-driver' 'opengl-driver') --old config
+conflicts=('mesa' 'opencl-mesa' 'libva-mesa-driver' 'mesa-libgl')
+# conflicts=('mesa' 'libva-mesa-driver') --old config
+url="https://www.mesa3d.org"
+license=('custom')
+source=('mesa::git+https://gitlab.freedesktop.org/mesa/mesa.git#branch=main'
+        'LICENSE')
+md5sums=('SKIP'
+         '5c65a0fe315dd347e09b1f2826a1df5a')
+sha512sums=('SKIP'
+            '25da77914dded10c1f432ebcbf29941124138824ceecaf1367b3deedafaecabc082d463abcfa3d15abff59f177491472b505bcb5ba0c4a51bb6b93b4721a23c2')
+
+# NINJAFLAGS is an env var used to pass commandline options to ninja
+# NOTE: It's your responbility to validate the value of $NINJAFLAGS. If unsure, don't set it.
+
+# MESA_WHICH_LLVM is an environment variable that determines which llvm package tree is used to built mesa-git against.
+# Adding a line to ~/.bashrc  that sets this value is the simplest way to ensure a specific choice.
+#
+# NOTE: Aur helpers don't handle this method well, check the sticky comments on mesa-git aur page .
+#
+# 1: llvm-minimal-git (aur) preferred value
+# 2: AUR llvm-git
+# 3: llvm-git from LordHeavy unofficial repo 
+# 4  llvm (stable from extra) Default value
+# 
+
+        
+pkgver() {
+    cd mesa
+    local _ver
+    read -r _ver <VERSION
+
+    local _patchver
+    local _patchfile
+    for _patchfile in "${source[@]}"; do
+        _patchfile="${_patchfile%%::*}"
+        _patchfile="${_patchfile##*/}"
+        [[ $_patchfile = *.patch ]] || continue
+        _patchver="${_patchver}$(md5sum ${srcdir}/${_patchfile} | cut -c1-32)"
+    done
+    _patchver="$(echo -n $_patchver | md5sum | cut -c1-32)"
+
+    echo ${_ver/-/_}.$(git rev-list --count HEAD).$(git rev-parse --short HEAD).${_patchver}
+}
+
+prepare() {
+    # although removing _build folder in build() function feels more natural,
+    # that interferes with the spirit of makepkg --noextract
+    if [  -d _build ]; then
+        rm -rf _build
+    fi
+
+    local _patchfile
+    for _patchfile in "${source[@]}"; do
+        _patchfile="${_patchfile%%::*}"
+        _patchfile="${_patchfile##*/}"
+        [[ $_patchfile = *.patch ]] || continue
+        echo "Applying patch $_patchfile..."
+        patch --directory=mesa --forward --strip=1 --input="${srcdir}/${_patchfile}"
+    done
+}
+
+build () {
+    meson setup mesa _build \
+       -D b_asneeded=true \
+       -D b_ndebug=true \
+       -D b_lto=true \
+       -D b_pgo=off \
+       -D buildtype=plain \
+       --wrap-mode=nofallback \
+       -D prefix=/usr \
+       -D sysconfdir=/etc \
+       -D platforms=wayland \
+       -D egl-native-platform=wayland \
+       -D gallium-drivers=crocus \
+       -D vulkan-drivers=[] \
+       -D dri3=enabled \
+       -D gallium-extra-hud=false \
+       -D gallium-nine=false \
+       -D gallium-omx=disabled \
+       -D gallium-va=disabled \
+       -D gallium-vdpau=disabled \
+       -D gallium-xa=disabled \
+       -D gallium-xvmc=disabled \
+       -D gbm=enabled \
+       -D gles1=disabled \
+       -D gles2=enabled \
+       -D glvnd=true \
+       -D glx=disabled \
+       -D egl=enabled \
+       -D libunwind=disabled \
+       -D llvm=disabled \
+       -D lmsensors=enabled \
+       -D osmesa=false \
+       -D shared-glapi=auto \
+       -D gallium-opencl=disabled \
+       -D valgrind=disabled \
+       -D vulkan-layers=[] \
+       -D tools=[] \
+       -D zstd=enabled \
+       -D power8=disabled \
+       -D shader-cache=disabled \
+       -D xlib-lease=disabled \
+       -D microsoft-clc=disabled \
+       -D glx-direct=true
+       
+    meson configure _build
+    
+    ninja $NINJAFLAGS -C _build
+}
+
+package() {
+    DESTDIR="${pkgdir}" ninja $NINJAFLAGS -C _build install
+
+    # indirect rendering
+    ln -s /usr/lib/libGLX_mesa.so.0 "${pkgdir}/usr/lib/libGLX_indirect.so.0"
+  
+    install -m644 -Dt "${pkgdir}/usr/share/licenses/${pkgname}" "${srcdir}/LICENSE"
+}
+

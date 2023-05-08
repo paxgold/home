@@ -1,0 +1,54 @@
+pkgname=libva-git
+pkgver=2.18.0.r10.gea9b0b34
+pkgrel=1
+pkgdesc='Video Acceleration (VA) API for Linux'
+arch=(x86_64)
+url=https://01.org/linuxmedia/vaapi
+license=(MIT)
+provides=(libva "libva=${pkgver}" libva-drm.so libva-wayland.so libva.so)
+conflicts=(libva)
+depends=(libdrm libgl wayland)
+makedepends=(git libglvnd mesa meson)
+optdepends=(
+  'intel-media-driver: backend for Intel GPUs (>= Broadwell)'
+  'libva-vdpau-driver: backend for Nvidia and AMD GPUs'
+  'libva-intel-driver: backend for Intel GPUs (<= Haswell)'
+)
+backup=(etc/libva.conf)
+_commit=ea9b0b34ae14bf32a21669f3192dd2b18c752d04
+source=("git+https://github.com/intel/libva.git#commit=${_commit}")
+sha256sums=('SKIP')
+
+pkgver() {
+    local _version
+    _version="$(git -C libva tag --list --sort='-v:refname' | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)*$' | sort -rV | head -n1)"
+    printf '%s.r%s.g%s' "$_version" \
+                        "$(git -C libva rev-list --count "${_version}..HEAD")" \
+                        "$(git -C libva rev-parse --short HEAD)"
+}
+
+build() {
+  export CFLAGS+=' -DENABLE_VA_MESSAGING' # Option missing
+  meson setup libva build \
+    --prefix /usr \
+    --libexecdir lib \
+    --sbindir bin \
+    --wrap-mode nodownload \
+    -D debug=false \
+    -D optimization=3 \
+    -D warning_level=0 \
+    -D errorlogs=false \
+    -D with_x11=no \
+    -D with_glx=no \
+    -D with_wayland=yes
+
+  ninja -C build
+
+}
+
+package() {
+    meson install -C build --destdir "$pkgdir"
+    install -D -m644 /dev/stdin "${pkgdir}/etc/libva.conf" <<__EOF__
+LIBVA_MESSAGING_LEVEL=1
+__EOF__
+}

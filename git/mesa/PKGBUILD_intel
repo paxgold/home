@@ -1,0 +1,106 @@
+pkgname=mesa+clang
+pkgdesc="Mesa open-source implementation of the OpenGL specification"
+pkgver=22.1.4
+_pkgver=${pkgver//_/-}
+pkgrel=1
+arch=('x86_64')
+makedepends=('git' 'python-mako' 'libxml2' 'libva' 'elfutils' 'wayland-protocols' 'meson' 'ninja' 'glslang')
+depends=('libdrm' 'libelf' 'libunwind' 'libglvnd' 'wayland' 'lm_sensors' 'zstd' 'expat')
+optdepends=('opengl-man-pages: for the OpenGL API man pages')
+provides=('mesa' 'opencl-mesa' 'libva-mesa-driver' 'mesa-libgl' 'opengl-driver' 'opencl-driver')
+# provides=('mesa' 'opencl-mesa' 'libva-mesa-driver' 'opengl-driver') --old config
+conflicts=('mesa' 'opencl-mesa' 'libva-mesa-driver' 'mesa-libgl')
+# conflicts=('mesa' 'libva-mesa-driver') --old config
+url="https://www.mesa3d.org"
+license=('custom')
+source=(
+  "https://archive.mesa3d.org/mesa-${_pkgver}.tar.xz"{,.sig}
+  'LICENSE'
+)
+
+sha256sums=('b98f32ba7aa2a1ff5725fb36eb999c693079f0ca16f70aa2f103e2b6c3f093e3'
+            'SKIP'
+            '7fdc119cf53c8ca65396ea73f6d10af641ba41ea1dd2bd44a824726e01c8b3f2')
+
+validpgpkeys=(
+  '57551DE15B968F6341C248F68D8E31AFC32428A6' # Keith Packard <keithp@keithp.com>
+  '71C4B75620BC75708B4BDB254C95FAAB3EB073EC' # Dylan Baker <dylan@pnwbakers.com>
+)
+
+_extra_lto_flag=""
+
+_patch() {
+
+  echo -e "\E[1;33m Apply patch: ${1}\E[0m"
+  patch -p1 -i "${srcdir:?}/${1}"
+
+}
+
+prepare() {
+
+  if clang --version 2>/dev/null | grep -iq "clang\s*version\s*[0-9]" && ld.lld --version 2>/dev/null | grep -iq "LLD\s*[0-9]"; then
+    _extra_lto_flag='-D b_lto_mode=thin'
+  fi
+
+}
+
+build() {
+
+  meson setup mesa-${_pkgver} build \
+    --prefix /usr \
+    --libexecdir lib \
+    --sbindir bin \
+    --auto-features enabled \
+    --wrap-mode nodownload \
+    -D debug=false \
+    -D optimization=2 \
+    -D b_ndebug=true \
+    -D b_lto=true ${_extra_lto_flag} \
+    -D b_pie=true \
+       -D sysconfdir=/etc \
+       -D platforms=wayland \
+       -D egl-native-platform=wayland \
+       -D gallium-drivers=crocus \
+       -D vulkan-drivers=[] \
+       -D dri3=enabled \
+       -D gallium-extra-hud=false \
+       -D gallium-nine=false \
+       -D gallium-omx=disabled \
+       -D gallium-va=disabled \
+       -D gallium-vdpau=disabled \
+       -D gallium-xa=disabled \
+       -D gallium-xvmc=disabled \
+       -D gbm=enabled \
+       -D gles1=disabled \
+       -D gles2=enabled \
+       -D glvnd=true \
+       -D glx=disabled \
+       -D egl=enabled \
+       -D libunwind=disabled \
+       -D llvm=enabled \
+       -D lmsensors=enabled \
+       -D osmesa=false \
+       -D shared-glapi=auto \
+       -D gallium-opencl=disabled \
+       -D valgrind=disabled \
+       -D vulkan-layers=[] \
+       -D tools=[] \
+       -D zstd=enabled \
+       -D power8=disabled \
+       -D shader-cache=disabled \
+       -D xlib-lease=disabled \
+       -D microsoft-clc=disabled \
+       -D glx-direct=true
+
+  meson compile -C build
+
+}
+
+package() {
+
+  DESTDIR="${pkgdir:?}" meson install -C build
+
+  ln -s /usr/lib/libGLX_mesa.so.0 "${pkgdir:?}/usr/lib/libGLX_indirect.so.0"
+
+
+}

@@ -1,0 +1,92 @@
+pkgbase=gvfs-git
+_pkgbase=gvfs
+pkgname=(gvfs-git gvfs-mtp-git)
+pkgver=1.50.3+1+gfb98a195
+pkgrel=1
+pkgdesc="Virtual filesystem implementation for GIO"
+url="https://wiki.gnome.org/Projects/gvfs"
+arch=(x86_64)
+license=(LGPL)
+depends=('fuse3' 'libarchive' 'udisks2' 'libsecret' 'libgudev' 'psmisc')
+#makedepends=('dbus' 'libgphoto2' 'libimobiledevice' 'smbclient' 'docbook-xsl' 'gtk3' 'libmtp'
+  #           'gnome-online-accounts' 'libnfs' 'libgdata' 'git' 'gtk-doc' 'python' 'meson'
+   #          'openssh' 'avahi' 'dconf' 'fuse3' 'libarchive' 'libcdio-paranoia' 'libsoup' 'udisks2' 'libsecret'
+  #       'libbluray')
+source=("git+https://gitlab.gnome.org/GNOME/gvfs.git"
+        gvfsd.hook)
+sha512sums=('SKIP'
+            'eb54f22e7d06f226160a2a8cac613f6e761d3f059f98e29c9cf49f0c2afa9126841338812000c402046e8373e56a01f958ecdd169161706a0e0dc09bc6112917')
+
+pkgver() {
+  cd $_pkgbase
+  git describe --tags | sed 's/-/+/g'
+}
+
+build() {
+  arch-meson $_pkgbase build \
+  -D man=false \
+  -D bluray=false \
+  -D fuse=false \
+  -D gcr=false \
+  -D gcrypt=false \
+  -D gudev=true \
+  -D afc=false \
+  -D afp=false \
+  -D cdda=false \
+  -D dnssd=false \
+  -D goa=false \
+  -D google=false \
+  -D gphoto2=false \
+  -D http=false \
+  -D nfs=false \
+  -D sftp=false \
+  -D smb=false \
+  -D admin=false
+  ninja -C build
+}
+
+check() {
+  meson test -C build --print-errorlogs
+}
+
+_split() {
+  local name="$1" src dest; shift
+  for src; do
+    echo "$name: /usr/$src"
+    dest="$srcdir/$name/$src"
+    mkdir -p "${dest%/*}"
+    mv -T "$src" "$dest"
+    rmdir -p --ignore-fail-on-non-empty "${src%/*}"
+  done
+}
+
+package_gvfs-git() {
+  replaces=(gvfs-{obexftp,afp})
+  optdepends=('gvfs-mtp: MTP device support'
+              'gtk3: Recent files support')
+  provides=('gvfs')
+  conflicts=('gvfs')
+  options=(!emptydirs)
+
+  DESTDIR="$pkgdir" meson install -C build
+
+  install -Dt "$pkgdir/usr/share/libalpm/hooks" -m644 *.hook
+  install -d -o root -g 102 -m 750 "$pkgdir/usr/share/polkit-1/rules.d"
+
+  cd "$pkgdir/usr"
+
+  _split mtp \
+    lib/gvfs{-mtp-volume-monitor,d-mtp} \
+    lib/systemd/user/gvfs-mtp-volume-monitor.service \
+    share/dbus-1/services/org.gtk.vfs.MTPVolumeMonitor.service \
+    share/gvfs/mounts/mtp.mount \
+    share/gvfs/remote-volume-monitors/mtp.monitor
+}
+package_gvfs-mtp-git() {
+  pkgdesc+=" (MTP backend; Android, media player)"
+  depends=("gvfs-git=$pkgver" 'libmtp')
+  provides=('gvfs-mtp')
+  conflicts=('gvfs-mtp')
+
+  mv "$srcdir/mtp" "$pkgdir/usr"
+}

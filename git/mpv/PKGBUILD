@@ -1,0 +1,109 @@
+pkgname=mpv+clang
+epoch=1
+pkgver=0.34.1
+pkgrel=6
+pkgdesc='a free, open source, and cross-platform media player'
+arch=('x86_64')
+license=('GPL3')
+url='https://mpv.io/'
+depends=('alsa-lib' 'libasound.so' 'libavcodec.so' 'libavdevice.so'
+  'libavformat.so' 'libavutil.so' 'libswscale.so'
+  'glibc'
+  'libass' 'libass.so'
+  'libdrm' 'libegl' 'libgl' 'libglvnd'
+  'libjpeg' 'libjpeg.so'
+  'libva' 'libva.so' 'libva-drm.so' 'libva-wayland.so'
+  'luajit' 'lua52' 'mesa' 'mujs'
+   'uchardet' 'wayland'
+  'zlib')
+makedepends=('git' 'wayland-protocols' 'waf')
+optdepends=(
+  'yt-dlp: for video-sharing websites playback'
+  'youtube-dl: for video-sharing websites playback'
+  'pipewire: Pipewire audio backend'
+)
+provides=('mpv' "mpv=${pkgver}" 'libmpv.so')
+conflicts=('mpv')
+options=('!emptydirs')
+_commit=59fc8eecbc08d22368451b31fcf799aec557ab0d # git rev-parse v${pkgver}
+source=(
+  "git+https://github.com/mpv-player/mpv.git#commit=${_commit}"
+)
+sha256sums=('SKIP')
+
+_llvm=0
+
+prepare() {
+
+  if clang --version 2>/dev/null | grep -iq "clang\s*version\s*[0-9]" && ld.lld --version 2>/dev/null | grep -iq "LLD\s*[0-9]"; then
+    _llvm=1
+  fi
+
+  cd "${srcdir:?}/mpv" || (
+    echo -e "\E[1;31mCan't cd to ${srcdir:?}/mpv directory! Prepare Failed! \E[0m"
+    exit 1
+  )
+
+}
+
+build() {
+
+  cd "${srcdir:?}/mpv" || (
+    echo -e "\E[1;31mCan't cd to ${srcdir:?}/mpv directory! Build Failed! \E[0m"
+    exit 1
+  )
+
+  if [[ ${_llvm} -eq 1 ]]; then
+
+    CFLAGS="${CFLAGS} -flto=thin"
+    CXXFLAGS="${CXXFLAGS} -flto=thin"
+    LDFLAGS="${LDFLAGS} -fuse-ld=lld"
+
+  fi
+
+  waf configure \
+    --prefix=/usr \
+    --confdir=/etc/mpv \
+        --enable-libmpv-shared \
+        --disable-libarchive \
+        --disable-libbluray \
+        --disable-caca \
+        --disable-egl-x11 \
+        --disable-pulse \
+        --disable-jack \
+        --disable-x11 \
+        --disable-sdl2 \
+        --disable-vaapi-x-egl \
+        --enable-alsa \
+        --enable-egl-drm \
+	    --enable-gl-wayland \
+	    --enable-vaapi \
+	    --enable-vaapi-wayland \
+	    --enable-vaapi-drm \
+	    --disable-direct3d \
+	    --disable-vulkan \
+	    --disable-cuda-hwaccel \
+	    --disable-cuda-interop \
+	    --disable-vdpau \
+	    --disable-android \
+	    --disable-rpi \
+	    --disable-ios-gl
+
+  waf build
+
+}
+
+package() {
+
+  cd "${srcdir:?}/mpv" || (
+    echo -e "\E[1;31mCan't cd to ${srcdir:?}/mpv directory! Package Failed! \E[0m"
+    exit 1
+  )
+
+  waf install --destdir="${pkgdir:?}"
+
+
+  install -m0644 "TOOLS/lua/"* \
+    -D -t "${pkgdir:?}/usr/share/mpv/scripts"
+
+}
